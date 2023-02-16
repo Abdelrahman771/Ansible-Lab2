@@ -1,0 +1,63 @@
+    - name: update Packages first
+      apt:
+        update_cache: true
+
+    - name: install wget
+      apt:
+        name: wget
+        state: present
+
+    - name: install openJDK
+      apt:
+        name: openjdk-8-jdk
+        state: present
+        update_cache: true
+
+    - name: create app directory
+      file:
+        path: "/app"
+        state: directory
+
+    - name: Download nexus
+      get_url:
+        url: https://download.sonatype.com/nexus/3/latest-unix.tar.gz
+        dest: /app/nexus.tar.gz
+
+    - name: extract nexus
+      unarchive:
+        remote_src: true
+        src: /app/nexus.tar.gz
+        dest: /app
+
+    - name: rename nexus directory
+      shell: "mv /app/nexus-3* /app/nexus"
+
+    - name: add user for nexus
+      user:
+        name: nexus
+
+    - name: change nexus directory owner to the newly created user
+      command: "chown -R nexus:nexus /app/nexus"
+        
+
+    - name: change sonatype-work directory owner to the newly created user
+      command: "chown -R nexus:nexus /app/sonatype-work"
+        
+    - name: "Uncomment the line"
+      replace:
+        path: /app/nexus/bin/nexus.rc
+        regexp: '#run_as_user=""'
+        replace: 'run_as_user="nexus"'
+
+    - name: create nexus systemd unit file
+      copy:
+        src: ./nexussys.txt
+        dest: /etc/systemd/system/nexus.service
+        
+    
+    - name: Start service nexus
+      service:
+          name: nexus
+          state: started
+    
+    

@@ -1,0 +1,170 @@
+    - name: update Packages first
+      apt:
+        update_cache: true 
+
+
+    - name: install openJDK
+      apt:
+        name: 
+         - openjdk-11-jdk
+         - wget
+         - python3-pip
+         - python3-psycopg2
+        state: present
+        update_cache: true
+
+
+
+    - name: Get-Postgress-repo
+      command: sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" >> /etc/apt/sources.list.d/pgdg.list'
+
+    - name: Add key to apt
+      apt_key:
+       url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+       state: present
+
+    - name: install postgresql
+      apt: 
+        name: 
+        - postgresql
+        - postgresql-contrib
+        state: present   
+
+    - name: enable-postgresql
+      service:
+        name: postgresql
+        enabled: true
+        state: started
+
+
+    - name: passwd-postgress
+      user:
+        user: postgres
+        password: "123456789"
+
+
+    - name: create-user
+      user:
+        name: sonar
+
+    - name: Change lines
+      replace:
+       path: /etc/postgresql/14/main/pg_hba.conf
+       regexp:  "local   all             postgres                                peer"
+       replace: "local   all             postgres                                trust"
+    
+    - name: Change lines
+      replace:
+       path: /etc/postgresql/14/main/pg_hba.conf
+       regexp:  "local   all             all                                     peer"
+       replace: "local   all             all                                     md5"
+
+       
+    - name: Restart postgresql
+      become: true
+      service:
+        name: postgresql
+        state: restarted
+        enabled: true
+        
+    - name: Create the database  
+      postgresql_db:
+       login_user: postgres
+       login_password: "123456789"
+       name: sonarqube 
+       template: 'template0'
+       state: present
+
+    - name: Create sonar user, and grant access
+      postgresql_user:
+        db: sonarqube
+        name: sonar
+        password: 123456789
+        priv: ALL
+        expires: infinity
+
+
+    - name: install zip
+      apt:
+       name: zip
+       state: present
+  
+  
+    - name: Download sonarqube zip
+      get_url:
+       url: "https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-7.9.6.zip"
+       dest: ./sonarqube
+
+
+    - name: extract sonarqube
+      unarchive:
+        remote_src: true
+        src: ./sonarqube
+        dest: .
+
+
+    - name: mv sonarqube directory
+      shell: "mv sonarqube-7.9.6 /opt/sonarqube"  
+
+    - name: Add sonar user
+      user:
+        name: sonar
+        home: /opt/sonarqube
+
+    - name: create sonaruser
+      user:
+        user: sonar
+        group: sonar
+        home: /opt/sonarqube
+    
+
+    - name: change sonarqube directory owner to the newly created user
+      command: "chown -R sonar:sonar /opt/sonarqube"
+
+
+    - name: "Uncomment username line"
+      replace:
+        path: /opt/sonarqube/conf/sonar.properties
+        regexp: '#sonar.jdbc.username='
+        replace: 'sonar.jdbc.username=sonar'
+
+
+
+    - name: "Uncomment password line"
+      replace:
+        path: /opt/sonarqube/conf/sonar.properties
+        regexp: '#sonar.jdbc.password='
+        replace: 'sonar.jdbc.password=123456789 \n sonar.jdbc.url=jdbc:postgresql://localhost:5432/sonarqube'
+
+
+    - name: "Uncomment RUN_AS_USER line"
+      replace:
+        path: /opt/sonarqube/bin/linux-x86-64/sonar.sh
+        regexp: '#RUN_AS_USER='
+        replace: 'RUN_AS_USER=sonar'
+
+
+
+    - name: create sonar systemd unit file
+      copy:
+        src: ./sonarservice.txt
+        dest: /etc/systemd/system/sonar.service
+
+
+    - name: Start service sonar
+      service:
+          name: sonar
+          state: started
+          enabled: true
+
+    - name: Modify Kernel System Limits
+      copy:
+        src: ./KernalSystems.txt
+        dest: /etc/sysctl.conf
+        
+    - name: reboot the machine
+      reboot:
+
+
+
+    
